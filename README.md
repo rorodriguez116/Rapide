@@ -1,2 +1,3 @@
 # Rapide
-A lightweight wrapper library for networking and parsing tasks
+
+A description of this package.
