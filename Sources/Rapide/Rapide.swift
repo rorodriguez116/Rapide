@@ -107,7 +107,9 @@ public final class Rapide {
                 CallError.urlError(error)
             })
             .tryMap { (data, response) in
-                guard let response = response as? HTTPURLResponse else { throw CallError.networkingError(.noResponse) }
+                guard
+                    let response = response as? HTTPURLResponse
+                else { throw CallError.networkingError(.noResponse) }
                 
                 if response.statusCode == 200 {
                     if let responseDict = try? JSONSerialization.jsonObject(with: data, options: []) as? [String: Any] {
@@ -120,7 +122,26 @@ public final class Rapide {
                 throw CallError.networkingError(NetworkError(rawValue: response.statusCode) ?? NetworkError.noResponse)
             }
             .eraseToAnyPublisher()
-        
-        
+    }
+    
+    public func call<T: Decodable>(request: URLRequest, decodable: T.Type) -> AnyPublisher<T, Error> {
+        URLSession(configuration: .default).dataTaskPublisher(for: request)
+            .mapError({ (error) -> CallError in
+                CallError.urlError(error)
+            })
+            .tryMap { (data, response) in
+                guard
+                    let response = response as? HTTPURLResponse
+                else { throw CallError.networkingError(.noResponse) }
+                
+                if response.statusCode == 200 {
+                    let decoder = JSONDecoder()
+                    let JSON = try decoder.decode(decodable, from: data)
+                    return JSON
+                } else {
+                    throw CallError.networkingError(NetworkError(rawValue: response.statusCode) ?? NetworkError.noResponse)
+                }
+            }
+            .eraseToAnyPublisher()
     }
 }
