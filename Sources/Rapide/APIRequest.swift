@@ -41,6 +41,8 @@ public struct ApiRequest {
         
         let scheme: URLScheme
         
+        let level: Level
+        
         let hostname: String
         
         let accessToken: String
@@ -50,6 +52,8 @@ public struct ApiRequest {
             self.scheme = scheme
             
             self.accessToken = authorization
+            
+            self.level = level
             
             switch level {
             
