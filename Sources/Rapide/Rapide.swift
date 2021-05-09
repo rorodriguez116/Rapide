@@ -65,6 +65,7 @@ public enum CallError: Error {
     case networkingError(NetworkError)
     case invalidJSONResponse
     case decodingError(MappingError)
+    case failedToDecodeJSONError(URLSession.DataTaskPublisher.Output)
 }
 
 public enum NetworkError: Int, Error, LocalizedError {
@@ -232,5 +233,41 @@ public class Rapide: NetworkProvider {
                 .flatMap { self.call(request: $0, decodable: decodable) }
                 .eraseToAnyPublisher()
         }
+        
+    }
+}
+
+public struct ResponseProcessor<T: Decodable> {
+    var process: (Data) throws -> T
+}
+
+extension Rapide.Lighthing {
+    public func call<T: Decodable>(request: URLRequest, processor: ResponseProcessor<T>) -> AnyPublisher<T, Error> {
+        URLSession(configuration: .default).dataTaskPublisher(for: request)
+            .mapError({ (error) -> CallError in
+                CallError.urlError(error)
+            })
+            .tryMap({ output in
+                guard
+                    let response = output.response as? HTTPURLResponse
+                else { throw CallError.failedToDecodeJSONError(output) }
+                
+                if response.statusCode == 200 {
+                    return try processor.process(output.data)
+                } else {
+                    throw CallError.networkingError(NetworkError(rawValue: response.statusCode) ?? NetworkError.noResponse)
+                }
+                
+            })
+            .eraseToAnyPublisher()
+    }
+    
+    public func request<T: Decodable>(_ method: ApiRequest.HTTPMethod, processor: ResponseProcessor<T>) -> AnyPublisher<T, Error> {
+        builder.withType(method)
+        return
+            builder
+            .buildPublisher()
+            .flatMap { self.call(request: $0, processor: processor) }
+            .eraseToAnyPublisher()
     }
 }
