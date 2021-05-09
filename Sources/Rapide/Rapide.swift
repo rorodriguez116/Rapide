@@ -156,14 +156,14 @@ public class Rapide: NetworkProvider {
         self.configuration = ApiRequest.Configuration(level: level, scheme: scheme, authorization: "")
     }
     
-    public static var main: Rapide.Lighthing {
+    public static var main: Rapide.Lightning {
         guard let config = configuration else { fatalError("Rapide: Can't access main without first providing a configuration. Use Rapide.configure() first.") }
-        return Rapide.Lighthing.newProvider(with: config)
+        return Rapide.Lightning.newProvider(with: config)
     }
     
-    public struct Lighthing: NetworkProvider {
-        static func newProvider(with config: ApiRequest.Configuration) -> Lighthing {
-            Lighthing(config: config)
+    public struct Lightning: NetworkProvider {
+        static func newProvider(with config: ApiRequest.Configuration) -> Lightning {
+            Lightning(config: config)
         }
         
         private init(config: ApiRequest.Configuration) {
@@ -175,43 +175,43 @@ public class Rapide: NetworkProvider {
         private var configurationLevel: ApiRequest.Configuration.Level?
         
         @discardableResult
-        public func withPath(_ path: String) -> Rapide.Lighthing {
+        public func withPath(_ path: String) -> Rapide.Lightning {
             self.builder.withPath(path)
             return self
         }
         
         @discardableResult
-        public func withVersion(_ version: String) -> Rapide.Lighthing {
+        public func withVersion(_ version: String) -> Rapide.Lightning {
             self.builder.withVersion(version)
             return self
         }
         
         @discardableResult
-        public func withResource(_ resource: String) -> Rapide.Lighthing {
+        public func withResource(_ resource: String) -> Rapide.Lightning {
             self.builder.withResource(resource)
             return self
         }
         
         @discardableResult
-        public func withEndPoint(_ endPoint: String) -> Rapide.Lighthing {
+        public func withEndPoint(_ endPoint: String) -> Rapide.Lightning {
             self.builder.withEndPoint(endPoint)
             return self
         }
         
         @discardableResult
-        public func withBodyParams(_ params: [String: Any]) -> Rapide.Lighthing {
+        public func withBodyParams(_ params: [String: Any]) -> Rapide.Lightning {
             self.builder.withBodyParams(params)
             return self
         }
         
         @discardableResult
-        public func withQueryParams(_ params: [String: String]) -> Rapide.Lighthing {
+        public func withQueryParams(_ params: [String: String]) -> Rapide.Lightning {
             self.builder.withQueryParams(params)
             return self
         }
         
         @discardableResult
-        public mutating func withAuthorization(_ authorization: String) -> Rapide.Lighthing {
+        public mutating func withAuthorization(_ authorization: String) -> Rapide.Lightning {
             guard
                 let newConfiguration =
                     ApiRequest.Configuration(
@@ -245,7 +245,7 @@ public struct ResponseProcessor<T: Decodable> {
     }
 }
 
-extension Rapide.Lighthing {
+extension Rapide.Lightning {
     public func call<T: Decodable>(request: URLRequest, processor: ResponseProcessor<T>) -> AnyPublisher<T, Error> {
         URLSession(configuration: .default).dataTaskPublisher(for: request)
             .mapError({ (error) -> CallError in
