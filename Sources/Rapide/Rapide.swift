@@ -238,7 +238,11 @@ public class Rapide: NetworkProvider {
 }
 
 public struct ResponseProcessor<T: Decodable> {
-    var process: (Data) throws -> T
+    public var process: (Data) throws -> T
+    
+    public init(process: @escaping (Data) throws -> T) {
+        self.process = process
+    }
 }
 
 extension Rapide.Lighthing {
