@@ -168,6 +168,7 @@ public class Rapide: NetworkProvider {
         
         private init(config: ApiRequest.Configuration) {
             self.configuration = config
+            self.builder.withConfiguration(configuration)
         }
         
         private let builder = ApiRequest.Builder()
