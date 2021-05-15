@@ -168,13 +168,10 @@ public class Rapide: NetworkProvider {
         }
         
         private init(config: ApiRequest.Configuration) {
-            self.configuration = config
             self.builder.withConfiguration(configuration)
         }
         
         private let builder = ApiRequest.Builder()
-        private var configuration: ApiRequest.Configuration
-        private var configurationLevel: ApiRequest.Configuration.Level?
         
         @discardableResult
         public func withPath(_ path: String) -> Rapide.Lightning {
@@ -213,8 +210,9 @@ public class Rapide: NetworkProvider {
         }
         
         @discardableResult
-        public mutating func withAuthorization(_ authorization: String) -> Rapide.Lightning {
+        public func withAuthorization(_ authorization: String) -> Rapide.Lightning {
             guard
+                let configuration = builder.getConfiguration(),
                 let newConfiguration =
                     ApiRequest.Configuration(
                         level: configuration.level,
@@ -222,7 +220,6 @@ public class Rapide: NetworkProvider {
                         authorization: authorization)
             else { fatalError("Rapide: Can't perform request without first providing a configuration.") }
             
-            self.configuration = newConfiguration
             self.builder.withConfiguration(newConfiguration)
             return self
         }

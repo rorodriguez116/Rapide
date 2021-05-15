@@ -124,11 +124,18 @@ public struct ApiRequest {
         }
         
         private var request = ApiRequest()
+        private var configuration: ApiRequest.Configuration?
+        private var configurationLevel: ApiRequest.Configuration.Level?
         
         public init() { }
         
+        func getConfiguration() -> ApiRequest.Configuration? {
+            return configuration
+        }
+                
         @discardableResult
         public func withConfiguration(_ config: Configuration?) -> ApiRequest.Builder {
+            self.configuration = config
             self.request.configuration = config
             return self
         }
