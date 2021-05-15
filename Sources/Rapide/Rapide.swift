@@ -33,7 +33,7 @@ extension NetworkProvider {
                     throw CallError.invalidJSONResponse
                 }
                 
-                throw CallError.networkingError(NetworkError(rawValue: response.statusCode) ?? NetworkError.noResponse)
+                throw CallError.networkingError(StatusCode(rawValue: response.statusCode) ?? StatusCode.noResponse)
             }
             .eraseToAnyPublisher()
     }
@@ -45,15 +45,16 @@ extension NetworkProvider {
             })
             .tryMap { (data, response) in
                 guard
-                    let response = response as? HTTPURLResponse
-                else { throw CallError.networkingError(.noResponse) }
-                
-                if response.statusCode == 200 {
+                    let response = response as? HTTPURLResponse,
+                    let statusCode = StatusCode(rawValue: response.statusCode)
+                else { throw CallError.invalidJSONResponse }
+            
+                switch statusCode {
+                case .Accepted, .OK, .Created, .Unauthorized:
                     let decoder = JSONDecoder()
                     let JSON = try decoder.decode(decodable, from: data)
-                    return JSON
-                } else {
-                    throw CallError.networkingError(NetworkError(rawValue: response.statusCode) ?? NetworkError.noResponse)
+                    return JSON                default:
+                    throw CallError.networkingError(statusCode)
                 }
             }
             .eraseToAnyPublisher()
@@ -62,13 +63,13 @@ extension NetworkProvider {
 
 public enum CallError: Error {
     case urlError(URLError)
-    case networkingError(NetworkError)
+    case networkingError(StatusCode)
     case invalidJSONResponse
     case decodingError(MappingError)
     case failedToDecodeJSONError(URLSession.DataTaskPublisher.Output)
 }
 
-public enum NetworkError: Int, Error, LocalizedError {
+public enum StatusCode: Int, Error, LocalizedError {
     case invalidData = 0
     case noResponse = 1
     case Continue = 100
@@ -254,15 +255,19 @@ extension Rapide.Lightning {
             })
             .tryMap({ output in
                 guard
-                    let response = output.response as? HTTPURLResponse
+                    let response = output.response as? HTTPURLResponse,
+                    let statusCode = StatusCode(rawValue: response.statusCode)
                 else { throw CallError.failedToDecodeJSONError(output) }
                 
-                if response.statusCode == 200 {
+                switch statusCode {
+                case .Accepted,
+                     .OK,
+                     .Created,
+                     .Unauthorized:
                     return try processor.process(output.data)
-                } else {
-                    throw CallError.networkingError(NetworkError(rawValue: response.statusCode) ?? NetworkError.noResponse)
+                default:
+                    throw CallError.networkingError(statusCode)
                 }
-                
             })
             .eraseToAnyPublisher()
     }
