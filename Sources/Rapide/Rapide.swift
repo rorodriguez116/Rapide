@@ -260,7 +260,8 @@ extension Rapide.Lightning {
                 case .Accepted,
                      .OK,
                      .Created,
-                     .Unauthorized:
+                     .Unauthorized,
+                     .BadRequest:
                     return try processor.process(output.data)
                 default:
                     throw CallError.networkingError(statusCode)
