@@ -151,27 +151,31 @@ public class Rapide: NetworkProvider {
     public init() {}
     
     private static var configuration: ApiRequest.Configuration?
+    private static var validCodes: [StatusCode]?
     
     /// Configures the shared instance of Rapide. Used to perform tasks when using the same scheme and domain.
-    public static func configure(level: ApiRequest.Configuration.Level, scheme: ApiRequest.URLScheme) {
+    public static func configure(level: ApiRequest.Configuration.Level, scheme: ApiRequest.URLScheme, validCodes: [StatusCode]) {
         self.configuration = ApiRequest.Configuration(level: level, scheme: scheme, authorization: "")
+        self.validCodes = validCodes
     }
     
     public static var main: Rapide.Lightning {
-        guard let config = configuration else { fatalError("Rapide: Can't access main without first providing a configuration. Use Rapide.configure() first.") }
-        return Rapide.Lightning.newProvider(with: config)
+        guard let config = configuration, let codes = validCodes else { fatalError("Rapide: Can't access main without first providing a configuration. Use Rapide.configure() first.") }
+        return Rapide.Lightning.newProvider(with: config, validCodes: codes)
     }
     
     public struct Lightning: NetworkProvider {
-        static func newProvider(with config: ApiRequest.Configuration) -> Lightning {
-            Lightning(config: config)
+        static func newProvider(with config: ApiRequest.Configuration, validCodes: [StatusCode]) -> Lightning {
+            Lightning(config: config, validCodes: validCodes)
         }
         
-        private init(config: ApiRequest.Configuration) {
+        private init(config: ApiRequest.Configuration, validCodes: [StatusCode]) {
             self.builder.withConfiguration(configuration)
+            self.validCodes = validCodes
         }
         
         private let builder = ApiRequest.Builder()
+        private let validCodes: [StatusCode]
         
         @discardableResult
         public func withPath(_ path: String) -> Rapide.Lightning {
@@ -256,14 +260,9 @@ extension Rapide.Lightning {
                     let statusCode = StatusCode(rawValue: response.statusCode)
                 else { throw CallError.failedToDecodeJSONError(output) }
                 
-                switch statusCode {
-                case .Accepted,
-                     .OK,
-                     .Created,
-                     .Unauthorized,
-                     .BadRequest:
+                if validCodes.contains(statusCode) {
                     return try processor.process(output.data)
-                default:
+                } else {
                     throw CallError.networkingError(statusCode)
                 }
             })
