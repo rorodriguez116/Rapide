@@ -1,9 +1,8 @@
 //
-//  APIRequest.swift
-//  LaProtectora
+//  Rapide.swift
+//  Rapide
 //
 //  Created by Rolando Rodriguez on 8/14/20.
-//  Copyright © 2020 Whiz. All rights reserved.
 //
 
 import Combine
@@ -17,53 +16,55 @@ internal protocol NetworkProvider {
 extension NetworkProvider {
     public func call(request: URLRequest) -> AnyPublisher<[String: Any], Error> {
         URLSession(configuration: .default).dataTaskPublisher(for: request)
-            .mapError({ (error) -> CallError in
-                CallError.urlError(error)
+            .mapError({ (error) -> RapideError in
+                RapideError.requestError(error)
             })
             .tryMap { (data, response) in
                 guard
                     let response = response as? HTTPURLResponse
-                else { throw CallError.networkingError(.noResponse) }
+                else { throw RapideError.httpError(.noResponse) }
                 
                 if response.statusCode == 200 {
                     if let responseDict = try? JSONSerialization.jsonObject(with: data, options: []) as? [String: Any] {
                         return responseDict
                     }
                     
-                    throw CallError.invalidJSONResponse
+                    throw RapideError.invalidJSONResponse
                 }
                 
-                throw CallError.networkingError(StatusCode(rawValue: response.statusCode) ?? StatusCode.noResponse)
+                throw RapideError.httpError(StatusCode(rawValue: response.statusCode) ?? StatusCode.noResponse)
             }
             .eraseToAnyPublisher()
     }
     
+    // MARK: TODO Update code to support more valid status codes
     public func call<T: Decodable>(request: URLRequest, decodable: T.Type) -> AnyPublisher<T, Error> {
         URLSession(configuration: .default).dataTaskPublisher(for: request)
-            .mapError({ (error) -> CallError in
-                CallError.urlError(error)
+            .mapError({ (error) -> RapideError in
+                RapideError.requestError(error)
             })
             .tryMap { (data, response) in
                 guard
                     let response = response as? HTTPURLResponse,
                     let statusCode = StatusCode(rawValue: response.statusCode)
-                else { throw CallError.invalidJSONResponse }
+                else { throw RapideError.invalidJSONResponse }
             
                 switch statusCode {
                 case .Accepted, .OK, .Created, .Unauthorized:
                     let decoder = JSONDecoder()
                     let JSON = try decoder.decode(decodable, from: data)
-                    return JSON                default:
-                    throw CallError.networkingError(statusCode)
+                    return JSON
+                default:
+                    throw RapideError.httpError(statusCode)
                 }
             }
             .eraseToAnyPublisher()
     }
 }
 
-public enum CallError: Error {
-    case urlError(URLError)
-    case networkingError(StatusCode)
+public enum RapideError: Error {
+    case requestError(URLError)
+    case httpError(StatusCode)
     case invalidJSONResponse
     case decodingError(MappingError)
     case failedToDecodeJSONError(URLSession.DataTaskPublisher.Output)
@@ -160,7 +161,7 @@ public class Rapide: NetworkProvider {
     }
     
     public static var main: Rapide.Lightning {
-        guard let config = configuration, let codes = validCodes else { fatalError("Rapide: Can't access main without first providing a configuration. Use Rapide.configure() first.") }
+        guard let config = configuration, let codes = validCodes else { fatalError("Rapide: Can't access main without first providing a configuration. Use Rapide.configure() on your AppDelegate or in your main Model in SwiftUI Lifecycle based apps first.") }
         return Rapide.Lightning.newProvider(with: config, validCodes: codes)
     }
     
@@ -251,19 +252,19 @@ public struct ResponseProcessor<T: Decodable> {
 extension Rapide.Lightning {
     public func call<T: Decodable>(request: URLRequest, processor: ResponseProcessor<T>) -> AnyPublisher<T, Error> {
         URLSession(configuration: .default).dataTaskPublisher(for: request)
-            .mapError({ (error) -> CallError in
-                CallError.urlError(error)
+            .mapError({ (error) -> RapideError in
+                RapideError.requestError(error)
             })
             .tryMap({ output in
                 guard
                     let response = output.response as? HTTPURLResponse,
                     let statusCode = StatusCode(rawValue: response.statusCode)
-                else { throw CallError.failedToDecodeJSONError(output) }
+                else { throw RapideError.failedToDecodeJSONError(output) }
                 
                 if validCodes.contains(statusCode) {
                     return try processor.process(output.data)
                 } else {
-                    throw CallError.networkingError(statusCode)
+                    throw RapideError.httpError(statusCode)
                 }
             })
             .eraseToAnyPublisher()
