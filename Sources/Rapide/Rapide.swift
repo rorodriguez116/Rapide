@@ -8,66 +8,14 @@
 import Combine
 import Foundation
 
-internal protocol NetworkProvider {
-    func call(request: URLRequest) -> AnyPublisher<[String: Any], Error>
-    func call<T: Decodable>(request: URLRequest, decodable: T.Type) -> AnyPublisher<T, Error>
-}
-
-extension NetworkProvider {
-    public func call(request: URLRequest) -> AnyPublisher<[String: Any], Error> {
-        URLSession(configuration: .default).dataTaskPublisher(for: request)
-            .mapError({ (error) -> RapideError in
-                RapideError.requestError(error)
-            })
-            .tryMap { (data, response) in
-                guard
-                    let response = response as? HTTPURLResponse
-                else { throw RapideError.httpError(.noResponse) }
-                
-                if response.statusCode == 200 {
-                    if let responseDict = try? JSONSerialization.jsonObject(with: data, options: []) as? [String: Any] {
-                        return responseDict
-                    }
-                    
-                    throw RapideError.invalidJSONResponse
-                }
-                
-                throw RapideError.httpError(StatusCode(rawValue: response.statusCode) ?? StatusCode.noResponse)
-            }
-            .eraseToAnyPublisher()
-    }
-    
-    // MARK: TODO Update code to support more valid status codes
-    public func call<T: Decodable>(request: URLRequest, decodable: T.Type) -> AnyPublisher<T, Error> {
-        URLSession(configuration: .default).dataTaskPublisher(for: request)
-            .mapError({ (error) -> RapideError in
-                RapideError.requestError(error)
-            })
-            .tryMap { (data, response) in
-                guard
-                    let response = response as? HTTPURLResponse,
-                    let statusCode = StatusCode(rawValue: response.statusCode)
-                else { throw RapideError.invalidJSONResponse }
-            
-                switch statusCode {
-                case .Accepted, .OK, .Created, .Unauthorized:
-                    let decoder = JSONDecoder()
-                    let JSON = try decoder.decode(decodable, from: data)
-                    return JSON
-                default:
-                    throw RapideError.httpError(statusCode)
-                }
-            }
-            .eraseToAnyPublisher()
-    }
-}
-
 public enum RapideError: Error {
+    case unhandledError(Error)
+    case missingAuthenticationToken
+    case userIsOffline
     case requestError(URLError)
-    case httpError(StatusCode)
-    case invalidJSONResponse
-    case decodingError(MappingError)
-    case failedToDecodeJSONError(URLSession.DataTaskPublisher.Output)
+    case expectedErrorWithJSONResponse(data: Data, statusCode: Int)
+    case failedToDecodeJSONError
+    case invalidHTTPResponse
 }
 
 public enum StatusCode: Int, Error, LocalizedError {
@@ -142,102 +90,180 @@ public enum StatusCode: Int, Error, LocalizedError {
     case NetworkConnectTimeoutError = 599
 }
 
-public enum MappingError: Error, LocalizedError {
-    case couldNotUnwrapData
-    case mapperResultTypeDoestNotMatchIntendedResultType
-}
+public class Rapide {
+    typealias QueryItemName = String
+    typealias QueryItemValue = String
+    typealias ErrorHandler = (Data, Int) -> Void
+    
+    enum Authorization {
+        typealias Token = String
+        case none
+        case bearer(Token)
+    }
 
-public class Rapide: NetworkProvider {
-    
-    public init() {}
-    
-    private static var configuration: ApiRequest.Configuration?
-    private static var validCodes: [StatusCode]?
-    
-    /// Configures the shared instance of Rapide. Used to perform tasks when using the same scheme and domain.
-    public static func configure(level: ApiRequest.Configuration.Level, scheme: ApiRequest.URLScheme, validCodes: [StatusCode]) {
-        self.configuration = ApiRequest.Configuration(level: level, scheme: scheme, authorization: "")
-        self.validCodes = validCodes
+    public enum HTTPMethod: String {
+        case options = "OPTIONS"
+        case get     = "GET"
+        case head    = "HEAD"
+        case post    = "POST"
+        case put     = "PUT"
+        case patch   = "PATCH"
+        case delete  = "DELETE"
+        case trace   = "TRACE"
+        case connect = "CONNECT"
     }
     
-    public static var main: Rapide.Lightning {
-        guard let config = configuration, let codes = validCodes else { fatalError("Rapide: Can't access main without first providing a configuration. Use Rapide.configure() on your AppDelegate or in your main Model in SwiftUI Lifecycle based apps first.") }
-        return Rapide.Lightning.newProvider(with: config, validCodes: codes)
+    public enum Scheme: String {
+        case https = "https"
+        case http = "http"
+    }
+        
+    static var https: RequestPathBuilder {
+        RequestPathBuilder(scheme: .https)
     }
     
-    public struct Lightning: NetworkProvider {
-        static func newProvider(with config: ApiRequest.Configuration, validCodes: [StatusCode]) -> Lightning {
-            Lightning(config: config, validCodes: validCodes)
-        }
+    static var http: RequestPathBuilder {
+        RequestPathBuilder(scheme: .http)
+    }
+    
+    class RequestPathBuilder {
+        fileprivate var host: String = ""
         
-        private init(config: ApiRequest.Configuration, validCodes: [StatusCode]) {
-            self.builder.withConfiguration(configuration)
-            self.validCodes = validCodes
-        }
+        fileprivate var path: String = ""
         
-        private let builder = ApiRequest.Builder()
-        private let validCodes: [StatusCode]
+        fileprivate var auth = Authorization.none
+        
+        fileprivate let scheme: Scheme
+        
+        fileprivate init(scheme: Scheme) {
+            self.scheme = scheme
+        }
         
         @discardableResult
-        public func withPath(_ path: String) -> Rapide.Lightning {
-            self.builder.withPath(path)
+        public func host(_ host: String) -> RequestPathBuilder {
+            self.host = host
             return self
         }
         
         @discardableResult
-        public func withVersion(_ version: String) -> Rapide.Lightning {
-            self.builder.withVersion(version)
+        public func path(_ path: String) -> RequestPathBuilder {
+            self.path = path
             return self
         }
         
         @discardableResult
-        public func withResource(_ resource: String) -> Rapide.Lightning {
-            self.builder.withResource(resource)
-            return self
+        public func authorization(_ auth: Authorization) -> RequestBuilder {
+            self.auth = auth
+            return RequestBuilder(builder: self)
+        }        
+    }
+    
+    class RapideExecutor {
+        private let requestBuilder: RequestBuilder
+        private let pathBuilder: RequestPathBuilder
+
+        fileprivate init(pathBuilder: RequestPathBuilder, requestBuilder: RequestBuilder) {
+            self.requestBuilder = requestBuilder
+            self.pathBuilder = pathBuilder
         }
         
-        @discardableResult
-        public func withEndPoint(_ endPoint: String) -> Rapide.Lightning {
-            self.builder.withEndPoint(endPoint)
-            return self
-        }
-        
-        @discardableResult
-        public func withBodyParams(_ params: [String: Any]) -> Rapide.Lightning {
-            self.builder.withBodyParams(params)
-            return self
-        }
-        
-        @discardableResult
-        public func withQueryParams(_ params: [String: String]) -> Rapide.Lightning {
-            self.builder.withQueryParams(params)
-            return self
-        }
-        
-        @discardableResult
-        public func withAuthorization(_ authorization: String) -> Rapide.Lightning {
-            guard
-                let configuration = builder.getConfiguration(),
-                let newConfiguration =
-                    ApiRequest.Configuration(
-                        level: configuration.level,
-                        scheme: configuration.scheme,
-                        authorization: authorization)
-            else { fatalError("Rapide: Can't perform request without first providing a configuration.") }
+        private func url() -> URL? {
+            var urlComponents = URLComponents()
             
-            self.builder.withConfiguration(newConfiguration)
-            return self
+            urlComponents.scheme = pathBuilder.scheme.rawValue
+            
+            urlComponents.host = pathBuilder.host
+            
+            urlComponents.path = pathBuilder.path
+            
+            if !requestBuilder.queryParams.isEmpty {
+                urlComponents.setQueryItems(with: requestBuilder.queryParams)
+            }
+            
+            return urlComponents.url
         }
         
-        public func request<T: Decodable>(_ method: ApiRequest.HTTPMethod, expect decodable: T.Type) -> AnyPublisher<T, Error> {
-            builder.withType(method)
-            return
-                builder
-                .buildPublisher()
-                .flatMap { self.call(request: $0, decodable: decodable) }
+        private var contentType: String {
+            "application/json"
+        }
+
+        fileprivate func buildRequest(for method: HTTPMethod) -> URLRequest {
+            guard let url = url() else { fatalError("\(Self.self): Cannot build a URLRequest with an ill defined base url.") }
+            var urlRequest = URLRequest(url: url)
+            
+            urlRequest.httpMethod = method.rawValue
+            
+            urlRequest.setValue(self.contentType, forHTTPHeaderField: "Content-Type")
+            
+            urlRequest.setValue(self.contentType, forHTTPHeaderField: "Accept")
+            
+            if case let Authorization.bearer(token) = pathBuilder.auth {
+                urlRequest.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            }
+            
+            if !self.requestBuilder.bodyParams.isEmpty {
+                urlRequest.httpBody = try! JSONSerialization.data(withJSONObject: self.requestBuilder.bodyParams, options: [])
+            }
+            
+            return urlRequest
+        }
+        
+        /// Returns a publisher that builds and executes a given HTTP method with a URLRequest configured with the data provider in this builder. The returned publisher has a success type
+        ///
+        /// - Parameters:
+        ///   - method: The HTTP Method to perform for this request.
+        ///   - type: The expected Codable conforming result type to map the JSON response to.
+        ///   - decoder: A JSON decoder
+        ///   - jsonErrorStatusCodes: A series of known HTTP status codes where the service will return a JSON object as response.
+        public func execute<T: Decodable>(_ method: HTTPMethod, decoding type: T.Type, decoder: JSONDecoder = JSONDecoder(), jsonErrorStatusCodes: Int?...) -> AnyPublisher<T, RapideError> {
+            URLSession(configuration: .default)
+                .dataTaskPublisher(for: buildRequest(for: method))
+                .mapError({ error -> RapideError in
+                    switch error {
+                    case URLError.userAuthenticationRequired:
+                        return RapideError.missingAuthenticationToken
+                        
+                    case URLError.notConnectedToInternet:
+                        return RapideError.userIsOffline
+                                                    
+                    default: return RapideError.requestError(error)
+                    }
+                })
+                .validate(using: { data, response in
+                    guard let response = response as? HTTPURLResponse else { throw RapideError.invalidHTTPResponse }
+                    if jsonErrorStatusCodes.contains(response.statusCode) {
+                        throw RapideError.expectedErrorWithJSONResponse(data: data, statusCode: response.statusCode)
+                    }
+                })
+                .map(\.data)
+                .decode(type: T.self, decoder: decoder)
+                .mapError { _ in RapideError.failedToDecodeJSONError }
                 .eraseToAnyPublisher()
         }
+    }
+    
+    class RequestBuilder {
+        private let pathBuilder: RequestPathBuilder
         
+        fileprivate init(builder: RequestPathBuilder) {
+            self.pathBuilder = builder
+        }
+        
+        fileprivate var queryParams = [String: String]()
+        
+        fileprivate var bodyParams = [String: Any]()
+                
+        @discardableResult
+        public func params(_ params: [String: Any]) -> RapideExecutor {
+            self.bodyParams = params
+            return RapideExecutor(pathBuilder: pathBuilder, requestBuilder: self)
+        }
+        
+        @discardableResult
+        public func query(_ params: [QueryItemName: QueryItemValue]) -> RapideExecutor {
+            self.queryParams = params
+            return RapideExecutor(pathBuilder: pathBuilder, requestBuilder: self)
+        }
     }
 }
 
@@ -249,33 +275,27 @@ public struct ResponseProcessor<T: Decodable> {
     }
 }
 
-extension Rapide.Lightning {
-    public func call<T: Decodable>(request: URLRequest, processor: ResponseProcessor<T>) -> AnyPublisher<T, Error> {
-        URLSession(configuration: .default).dataTaskPublisher(for: request)
-            .mapError({ (error) -> RapideError in
-                RapideError.requestError(error)
-            })
-            .tryMap({ output in
-                guard
-                    let response = output.response as? HTTPURLResponse,
-                    let statusCode = StatusCode(rawValue: response.statusCode)
-                else { throw RapideError.failedToDecodeJSONError(output) }
-                
-                if validCodes.contains(statusCode) {
-                    return try processor.process(output.data)
-                } else {
-                    throw RapideError.httpError(statusCode)
-                }
-            })
-            .eraseToAnyPublisher()
+extension URLComponents {
+    mutating func setQueryItems(with parameters: [String: String]) {
+        self.queryItems = parameters.map { URLQueryItem(name: $0.key, value: $0.value) }
     }
-    
-    public func request<T: Decodable>(_ method: ApiRequest.HTTPMethod, processor: ResponseProcessor<T>) -> AnyPublisher<T, Error> {
-        builder.withType(method)
-        return
-            builder
-            .buildPublisher()
-            .flatMap { self.call(request: $0, processor: processor) }
+}
+
+extension Publisher {
+    func validate(
+        using validator: @escaping (Output) throws -> Void
+    ) -> Publishers.TryMap<Self, Output> {
+        tryMap { output in
+            try validator(output)
+            return output
+        }
+    }
+}
+
+extension Publisher {
+    func convertToResult() -> AnyPublisher<Result<Output, Failure>, Never> {
+        self.map(Result.success)
+            .catch { Just(.failure($0)) }
             .eraseToAnyPublisher()
     }
 }

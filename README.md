@@ -7,11 +7,28 @@ As an example, we'll perform a get request to the following API:
 <pre>
 <code>
 Rapide
-.https
-.host("openexhangerates.org")
-.path("/api/convert/2000/GBP/EUR")
-.params(["app_id":"XYZ"])
-.execute(.post, expect: UserJSON.self)
+    .https
+    .host("openexhangerates.org")
+    .path("/api/convert/2000/GBP/EUR")
+    .authorization(.none)
+    .params(["app_id":"XYZ"])
+    .execute(.get, decoding: String.self)
+    .sink { completion in
+        if case let .failure(error) = completion {
+            switch error {
+            // Handle expected JSON error response from known status code (e.j 420)
+            case .expectedErrorWithJSONResponse(let data, let code):
+                let decoder = JSONDecoder()
+                decoder.decode(data, from: My420JSONType.self)
+            default: print(error)
+            }
+        }
+    } receiveValue: { val in
+        // success
+        
+    }
+
+    .store(in: &self.subscriptions)
 </code>
 </pre>
 The presented code is very easy to read. First we specify the connection scheme we want to use, Rapide offers http, https and ftp. Then we provide the host and path to our API, the parameters we want to pass the API to and we finalize calling execute, which will return a combine publisher that will execute the specified http method and map the response to the provided Codable conforming type. 
