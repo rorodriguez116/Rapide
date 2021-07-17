@@ -237,7 +237,9 @@ public class Rapide {
                 })
                 .map(\.data)
                 .decode(type: T.self, decoder: decoder)
-                .mapError { error in RapideError.failedToDecodeJSONError }
+                .mapError { error in
+                    RapideError.failedToDecodeJSONError
+                }
                 .eraseToAnyPublisher()
         }
     }
