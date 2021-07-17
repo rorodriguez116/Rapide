@@ -15,7 +15,7 @@ public enum RapideError: Error {
     case requestError(URLError)
     case expectedErrorWithJSONResponse(Data, Int)
     case invalidHTTPResponse
-    case jsonDecodingFailed(String)
+    case jsonDecodingFailed(DecodingError)
     
     var description: String {
         switch self {
@@ -262,7 +262,7 @@ public class Rapide {
                         
                         }
                     } else if let error = error as? DecodingError {
-                        return RapideError.jsonDecodingFailed(error.failureReason ?? "No reason known")
+                        return RapideError.jsonDecodingFailed(error)
                     } else if let error = error as? RapideError {
                         return error
                     }
