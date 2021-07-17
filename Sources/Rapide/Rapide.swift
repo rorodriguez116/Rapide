@@ -91,8 +91,8 @@ public enum StatusCode: Int, Error, LocalizedError {
 }
 
 public class Rapide {
-    typealias QueryItemName = String
-    typealias QueryItemValue = String
+    public typealias QueryItemName = String
+    public typealias QueryItemValue = String
     typealias ErrorHandler = (Data, Int) -> Void
     
     enum Authorization {
@@ -158,7 +158,7 @@ public class Rapide {
         }        
     }
     
-    class RapideExecutor {
+    public class RapideExecutor {
         private let requestBuilder: RequestBuilder
         private let pathBuilder: RequestPathBuilder
 
@@ -242,7 +242,7 @@ public class Rapide {
         }
     }
     
-    class RequestBuilder {
+    public class RequestBuilder {
         private let pathBuilder: RequestPathBuilder
         
         fileprivate init(builder: RequestPathBuilder) {
