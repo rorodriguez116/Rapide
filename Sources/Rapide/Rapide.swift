@@ -13,8 +13,32 @@ public enum RapideError: Error {
     case missingAuthenticationToken
     case userIsOffline
     case requestError(URLError)
-    case expectedErrorWithJSONResponse(data: Data, statusCode: Int)
+    case expectedErrorWithJSONResponse(Data, Int)
     case invalidHTTPResponse
+    case jsonDecodingFailed(String)
+    
+    var description: String {
+        switch self {
+        case .anotherError(let error):
+            return error.localizedDescription
+        case .missingAuthenticationToken:
+            return "RapideError: Request failed, missing authentication token or authorization."
+            
+        case .userIsOffline:
+            return "The user is offline."
+            
+        case .requestError(let error):
+        return error.localizedDescription
+        
+        case .expectedErrorWithJSONResponse(_, let statusCode):
+            return "Request failed, but received a known JSON response object representing an error for status code \(statusCode)."
+            
+        case .invalidHTTPResponse:
+            return "Invalid HTTP response."
+        case .jsonDecodingFailed(let reason):
+            return "JSON Decoding failed, reason: \(reason)"
+        }
+    }
 }
 
 public enum StatusCode: Int, Error, LocalizedError {
@@ -217,28 +241,34 @@ public class Rapide {
         public func execute<T: Decodable>(_ method: HTTPMethod, decoding type: T.Type, decoder: JSONDecoder = JSONDecoder(), jsonErrorStatusCodes: Int?...) -> AnyPublisher<T, RapideError> {
             URLSession(configuration: .default)
                 .dataTaskPublisher(for: buildRequest(for: method))
-                .mapError({ error -> RapideError in
-                    switch error {
-                    case URLError.userAuthenticationRequired:
-                        return RapideError.missingAuthenticationToken
-                        
-                    case URLError.notConnectedToInternet:
-                        return RapideError.userIsOffline
-                                                    
-                    default: return RapideError.requestError(error)
-                    }
-                })
                 .validate(using: { data, response in
                     guard let response = response as? HTTPURLResponse else { throw RapideError.invalidHTTPResponse }
                     if jsonErrorStatusCodes.contains(response.statusCode) {
-                        throw RapideError.expectedErrorWithJSONResponse(data: data, statusCode: response.statusCode)
+                        throw RapideError.expectedErrorWithJSONResponse(data, response.statusCode)
                     }
                 })
                 .map(\.data)
                 .decode(type: T.self, decoder: decoder)
-                .mapError { error in
-                    RapideError.anotherError(error)
-                }
+                .mapError({ error -> RapideError in
+                    if let error = error as? URLError {
+                        switch error {
+                        case URLError.userAuthenticationRequired:
+                            return RapideError.missingAuthenticationToken
+                            
+                        case URLError.notConnectedToInternet:
+                            return RapideError.userIsOffline
+                            
+                        default: return RapideError.requestError(error)
+                        
+                        }
+                    } else if let error = error as? DecodingError {
+                        return RapideError.jsonDecodingFailed(error.failureReason ?? "No reason known")
+                    } else if let error = error as? RapideError {
+                        return error
+                    }
+                    
+                    return RapideError.anotherError(error)
+                })
                 .eraseToAnyPublisher()
         }
     }
