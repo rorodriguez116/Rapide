@@ -95,8 +95,8 @@ public class Rapide {
     public typealias QueryItemValue = String
     typealias ErrorHandler = (Data, Int) -> Void
     
-    enum Authorization {
-        typealias Token = String
+    public enum Authorization {
+        public typealias Token = String
         case none
         case bearer(Token)
     }
@@ -118,15 +118,15 @@ public class Rapide {
         case http = "http"
     }
         
-    static var https: RequestPathBuilder {
+    public static var https: RequestPathBuilder {
         RequestPathBuilder(scheme: .https)
     }
     
-    static var http: RequestPathBuilder {
+    public static var http: RequestPathBuilder {
         RequestPathBuilder(scheme: .http)
     }
     
-    class RequestPathBuilder {
+    public class RequestPathBuilder {
         fileprivate var host: String = ""
         
         fileprivate var path: String = ""
