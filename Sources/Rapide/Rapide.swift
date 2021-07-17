@@ -9,12 +9,11 @@ import Combine
 import Foundation
 
 public enum RapideError: Error {
-    case unhandledError(Error)
+    case anotherError(Error)
     case missingAuthenticationToken
     case userIsOffline
     case requestError(URLError)
     case expectedErrorWithJSONResponse(data: Data, statusCode: Int)
-    case failedToDecodeJSONError
     case invalidHTTPResponse
 }
 
@@ -238,7 +237,7 @@ public class Rapide {
                 .map(\.data)
                 .decode(type: T.self, decoder: decoder)
                 .mapError { error in
-                    RapideError.failedToDecodeJSONError
+                    RapideError.anotherError(error)
                 }
                 .eraseToAnyPublisher()
         }
