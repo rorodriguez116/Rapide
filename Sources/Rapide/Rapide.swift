@@ -271,6 +271,46 @@ public class Rapide {
                 })
                 .eraseToAnyPublisher()
         }
+        
+        public func execute(_ method: HTTPMethod, jsonErrorStatusCodes: Int?...) -> AnyPublisher<[String: Any], RapideError> {
+            URLSession(configuration: .default)
+                .dataTaskPublisher(for: buildRequest(for: method))
+                .validate(using: { data, response in
+                    guard let response = response as? HTTPURLResponse else { throw RapideError.invalidHTTPResponse }
+                    if jsonErrorStatusCodes.contains(response.statusCode) {
+                        throw RapideError.expectedErrorWithJSONResponse(data, response.statusCode)
+                    }
+                })
+                .map(\.data)
+                .tryMap { data in
+                    let jsonData = try JSONSerialization.data(withJSONObject: data, options: .fragmentsAllowed)
+                    let json = try JSONSerialization.jsonObject(with: jsonData, options: .allowFragments)
+                    guard let dictionary = json as? [String: Any] else { throw RapideError.jsonDecodingFailed(.dataCorrupted(.init(codingPath: [], debugDescription: "Could not cast data response into dictionary."))) }
+                    return dictionary
+                }
+                .mapError({ error -> RapideError in
+                    if let error = error as? URLError {
+                        switch error {
+                        case URLError.userAuthenticationRequired:
+                            return RapideError.missingAuthenticationToken
+                            
+                        case URLError.notConnectedToInternet:
+                            return RapideError.userIsOffline
+                            
+                        default: return RapideError.requestError(error)
+                        
+                        }
+                    } else if let error = error as? DecodingError {
+                        return RapideError.jsonDecodingFailed(error)
+                    } else if let error = error as? RapideError {
+                        return error
+                    }
+                    
+                    return RapideError.anotherError(error)
+                })
+                .eraseToAnyPublisher()
+        }
+
     }
     
     public class RequestBuilder {
