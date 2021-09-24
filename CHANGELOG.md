@@ -6,8 +6,6 @@ The format of the changelog roughly matches the specification detailed at [keepa
 
 ## [Unreleased]
 
-### Release Notes
-
 ### Breaking Changes
 
 ### Added
@@ -17,3 +15,16 @@ The format of the changelog roughly matches the specification detailed at [keepa
 ### Removed
 
 ### Fixed
+
+## [0.2.0]
+
+### Breaking Changes
+
+### Added
+- Added `printDebugInfo` method, to print debug info when getting response from service call.
+### Updated
+- Updated `RapideExecutor`, migrated to a struct.
+### Removed
+
+### Fixed
+

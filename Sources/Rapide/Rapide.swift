@@ -158,7 +158,7 @@ public class Rapide {
         }        
     }
     
-    class RapideExecutor {
+    struct RapideExecutor {
         private let requestBuilder: RequestBuilder
         private let pathBuilder: RequestPathBuilder
 
@@ -208,6 +208,25 @@ public class Rapide {
             return urlRequest
         }
         
+        private func printDebugInfo(from data: Data, request: URLRequest, params: [String: Any], response: HTTPURLResponse) {
+            print("--------RAPIDE DEBUGGING--------")
+            if let url = response.url {
+                print("Path: \(url)")
+            }
+            
+            if let data = try? JSONSerialization.data(withJSONObject: params, options: JSONSerialization.WritingOptions.prettyPrinted), let jsonParams = String(data: data, encoding: String.Encoding.utf8)  {
+                print("Parameters: \(jsonParams)")
+            }
+            
+            print("Result: HTTP Status Code \(response.statusCode)")
+            
+            if let json = String(data: data, encoding: String.Encoding.utf8) {
+                print("Response: \(json)")
+            }
+            
+            print("--------------------------------")
+        }
+        
         /// Returns a publisher that builds and executes a given HTTP method with a URLRequest configured with the data provider in this builder. The returned publisher has a success type
         ///
         /// - Parameters:
@@ -216,8 +235,9 @@ public class Rapide {
         ///   - decoder: A JSON decoder
         ///   - jsonErrorStatusCodes: A series of known HTTP status codes where the service will return a JSON object as response.
         public func execute<T: Decodable>(_ method: HTTPMethod, decoding type: T.Type, decoder: JSONDecoder = JSONDecoder(), jsonErrorStatusCodes: Int?...) -> AnyPublisher<T, RapideError> {
-            URLSession(configuration: .default)
-                .dataTaskPublisher(for: buildRequest(for: method))
+            let request = buildRequest(for: method)
+            return URLSession(configuration: .default)
+                .dataTaskPublisher(for: request)
                 .mapError({ error -> RapideError in
                     switch error {
                     case URLError.userAuthenticationRequired:
@@ -231,6 +251,7 @@ public class Rapide {
                 })
                 .validate(using: { data, response in
                     guard let response = response as? HTTPURLResponse else { throw RapideError.invalidHTTPResponse }
+                    printDebugInfo(from: data, request: request, params: requestBuilder.bodyParams, response: response)
                     if jsonErrorStatusCodes.contains(response.statusCode) {
                         throw RapideError.expectedErrorWithJSONResponse(data: data, statusCode: response.statusCode)
                     }
