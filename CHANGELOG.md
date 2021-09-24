@@ -16,6 +16,19 @@ The format of the changelog roughly matches the specification detailed at [keepa
 
 ### Fixed
 
+## [0.2.1]
+
+### Breaking Changes
+
+### Added
+
+### Updated
+
+### Removed
+
+### Fixed
+- Fixed access control for Xcode 13.
+
 ## [0.2.0]
 
 ### Breaking Changes

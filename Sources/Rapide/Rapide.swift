@@ -91,12 +91,12 @@ public enum StatusCode: Int, Error, LocalizedError {
 }
 
 public class Rapide {
-    typealias QueryItemName = String
-    typealias QueryItemValue = String
-    typealias ErrorHandler = (Data, Int) -> Void
+    public typealias QueryItemName = String
+    public typealias QueryItemValue = String
+    public typealias ErrorHandler = (Data, Int) -> Void
     
-    enum Authorization {
-        typealias Token = String
+    public enum Authorization {
+        public typealias Token = String
         case none
         case bearer(Token)
     }
@@ -118,15 +118,15 @@ public class Rapide {
         case http = "http"
     }
         
-    static var https: RequestPathBuilder {
+    static public var https: RequestPathBuilder {
         RequestPathBuilder(scheme: .https)
     }
     
-    static var http: RequestPathBuilder {
+    static public var http: RequestPathBuilder {
         RequestPathBuilder(scheme: .http)
     }
     
-    class RequestPathBuilder {
+    public class RequestPathBuilder {
         fileprivate var host: String = ""
         
         fileprivate var path: String = ""
@@ -158,7 +158,7 @@ public class Rapide {
         }        
     }
     
-    struct RapideExecutor {
+    public struct RapideExecutor {
         private let requestBuilder: RequestBuilder
         private let pathBuilder: RequestPathBuilder
 
@@ -263,7 +263,7 @@ public class Rapide {
         }
     }
     
-    class RequestBuilder {
+    public class RequestBuilder {
         private let pathBuilder: RequestPathBuilder
         
         fileprivate init(builder: RequestPathBuilder) {
