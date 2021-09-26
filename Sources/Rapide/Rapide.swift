@@ -9,11 +9,12 @@ import Combine
 import Foundation
 
 public enum RapideError: Error {
+    /// Use this case to unwrap your custom error model
+    case customError(Error)
     case unhandledError(Error)
     case missingAuthenticationToken
     case userIsOffline
     case requestError(URLError)
-    case expectedErrorWithJSONResponse(data: Data, statusCode: Int)
     case failedToDecodeJSONError
     case invalidHTTPResponse
 }
@@ -90,7 +91,9 @@ public enum StatusCode: Int, Error, LocalizedError {
     case NetworkConnectTimeoutError = 599
 }
 
-public class Rapide {
+public typealias DecodableError = Error & Decodable
+
+public enum Rapide {
     public typealias QueryItemName = String
     public typealias QueryItemValue = String
     public typealias ErrorHandler = (Data, Int) -> Void
@@ -125,175 +128,6 @@ public class Rapide {
     static public var http: RequestPathBuilder {
         RequestPathBuilder(scheme: .http)
     }
-    
-    public class RequestPathBuilder {
-        fileprivate var host: String = ""
-        
-        fileprivate var path: String = ""
-        
-        fileprivate var auth = Authorization.none
-        
-        fileprivate let scheme: Scheme
-        
-        fileprivate init(scheme: Scheme) {
-            self.scheme = scheme
-        }
-        
-        @discardableResult
-        public func host(_ host: String) -> RequestPathBuilder {
-            self.host = host
-            return self
-        }
-        
-        @discardableResult
-        public func path(_ path: String) -> RequestPathBuilder {
-            self.path = path
-            return self
-        }
-        
-        @discardableResult
-        public func authorization(_ auth: Authorization) -> RequestBuilder {
-            self.auth = auth
-            return RequestBuilder(builder: self)
-        }        
-    }
-    
-    public struct RapideExecutor {
-        private let requestBuilder: RequestBuilder
-        private let pathBuilder: RequestPathBuilder
-
-        fileprivate init(pathBuilder: RequestPathBuilder, requestBuilder: RequestBuilder) {
-            self.requestBuilder = requestBuilder
-            self.pathBuilder = pathBuilder
-        }
-        
-        private func url() -> URL? {
-            var urlComponents = URLComponents()
-            
-            urlComponents.scheme = pathBuilder.scheme.rawValue
-            
-            urlComponents.host = pathBuilder.host
-            
-            urlComponents.path = pathBuilder.path
-            
-            if !requestBuilder.queryParams.isEmpty {
-                urlComponents.setQueryItems(with: requestBuilder.queryParams)
-            }
-            
-            return urlComponents.url
-        }
-        
-        private var contentType: String {
-            "application/json"
-        }
-
-        fileprivate func buildRequest(for method: HTTPMethod) -> URLRequest {
-            guard let url = url() else { fatalError("\(Self.self): Cannot build a URLRequest with an ill defined base url.") }
-            var urlRequest = URLRequest(url: url)
-            
-            urlRequest.httpMethod = method.rawValue
-            
-            urlRequest.setValue(self.contentType, forHTTPHeaderField: "Content-Type")
-            
-            urlRequest.setValue(self.contentType, forHTTPHeaderField: "Accept")
-            
-            if case let Authorization.bearer(token) = pathBuilder.auth {
-                urlRequest.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-            }
-            
-            if !self.requestBuilder.bodyParams.isEmpty {
-                urlRequest.httpBody = try! JSONSerialization.data(withJSONObject: self.requestBuilder.bodyParams, options: [])
-            }
-            
-            return urlRequest
-        }
-        
-        private func printDebugInfo(from data: Data, request: URLRequest, params: [String: Any], response: HTTPURLResponse) {
-            print("--------RAPIDE DEBUGGING--------")
-            if let url = response.url {
-                print("Path: \(url)")
-            }
-            
-            if let data = try? JSONSerialization.data(withJSONObject: params, options: JSONSerialization.WritingOptions.prettyPrinted), let jsonParams = String(data: data, encoding: String.Encoding.utf8)  {
-                print("Parameters: \(jsonParams)")
-            }
-            
-            print("Result: HTTP Status Code \(response.statusCode)")
-            
-            if let json = String(data: data, encoding: String.Encoding.utf8) {
-                print("Response: \(json)")
-            }
-            
-            print("--------------------------------")
-        }
-        
-        /// Returns a publisher that builds and executes a given HTTP method with a URLRequest configured with the data provider in this builder. The returned publisher has a success type
-        ///
-        /// - Parameters:
-        ///   - method: The HTTP Method to perform for this request.
-        ///   - type: The expected Codable conforming result type to map the JSON response to.
-        ///   - decoder: A JSON decoder
-        ///   - jsonErrorStatusCodes: A series of known HTTP status codes where the service will return a JSON object as response.
-        public func execute<T: Decodable>(_ method: HTTPMethod, decoding type: T.Type, decoder: JSONDecoder = JSONDecoder(), jsonErrorStatusCodes: Int?...) -> AnyPublisher<T, RapideError> {
-            let request = buildRequest(for: method)
-            return URLSession(configuration: .default)
-                .dataTaskPublisher(for: request)
-                .mapError({ error -> RapideError in
-                    switch error {
-                    case URLError.userAuthenticationRequired:
-                        return RapideError.missingAuthenticationToken
-                        
-                    case URLError.notConnectedToInternet:
-                        return RapideError.userIsOffline
-                                                    
-                    default: return RapideError.requestError(error)
-                    }
-                })
-                .validate(using: { data, response in
-                    guard let response = response as? HTTPURLResponse else { throw RapideError.invalidHTTPResponse }
-                    printDebugInfo(from: data, request: request, params: requestBuilder.bodyParams, response: response)
-                    if jsonErrorStatusCodes.contains(response.statusCode) {
-                        throw RapideError.expectedErrorWithJSONResponse(data: data, statusCode: response.statusCode)
-                    }
-                })
-                .map(\.data)
-                .decode(type: T.self, decoder: decoder)
-                .mapError { _ in RapideError.failedToDecodeJSONError }
-                .eraseToAnyPublisher()
-        }
-    }
-    
-    public class RequestBuilder {
-        private let pathBuilder: RequestPathBuilder
-        
-        fileprivate init(builder: RequestPathBuilder) {
-            self.pathBuilder = builder
-        }
-        
-        fileprivate var queryParams = [String: String]()
-        
-        fileprivate var bodyParams = [String: Any]()
-                
-        @discardableResult
-        public func params(_ params: [String: Any]) -> RapideExecutor {
-            self.bodyParams = params
-            return RapideExecutor(pathBuilder: pathBuilder, requestBuilder: self)
-        }
-        
-        @discardableResult
-        public func query(_ params: [QueryItemName: QueryItemValue]) -> RapideExecutor {
-            self.queryParams = params
-            return RapideExecutor(pathBuilder: pathBuilder, requestBuilder: self)
-        }
-    }
-}
-
-public struct ResponseProcessor<T: Decodable> {
-    public var process: (Data) throws -> T
-    
-    public init(process: @escaping (Data) throws -> T) {
-        self.process = process
-    }
 }
 
 extension URLComponents {
@@ -303,8 +137,8 @@ extension URLComponents {
 }
 
 extension Publisher {
-    func validate(
-        using validator: @escaping (Output) throws -> Void
+    /// Perform a validation, if the validation succeeds the stream continues, otherwise it throws an error
+    func validate(_ validator: @escaping (Output) throws -> Void
     ) -> Publishers.TryMap<Self, Output> {
         tryMap { output in
             try validator(output)
