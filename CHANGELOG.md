@@ -16,6 +16,19 @@ The format of the changelog roughly matches the specification detailed at [keepa
 
 ### Fixed
 
+## [0.3.1]
+
+### Breaking Changes
+
+### Added
+- Added compatibility with macOS from version 10.15 onwards.
+### Updated
+
+### Removed
+
+### Fixed
+
+
 ## [0.2.1]
 
 ### Breaking Changes
