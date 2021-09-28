@@ -151,5 +151,82 @@ extension Rapide {
                 .mapError { _ in RapideError.failedToDecodeJSONError }
                 .eraseToAnyPublisher()
         }
+        
+        /// Returns a publisher that builds and executes a given HTTP method with a URLRequest configured with the data provider in this builder. The returned publisher has a success type [String: Any]
+        ///
+        /// - Parameters:
+        ///   - method: The HTTP Method to perform for this request.
+        public func execute(_ method: HTTPMethod) -> AnyPublisher<[String: Any], RapideError> {
+            let request = buildRequest(for: method)
+            return URLSession(configuration: .default)
+                .dataTaskPublisher(for: request)
+                .mapError({ error -> RapideError in
+                    switch error {
+                    case URLError.userAuthenticationRequired:
+                        return RapideError.missingAuthenticationToken
+                        
+                    case URLError.notConnectedToInternet:
+                        return RapideError.userIsOffline
+                                                    
+                    default: return RapideError.requestError(error)
+                    }
+                })
+                .validate { data, response in
+                    guard let response = response as? HTTPURLResponse else { throw RapideError.invalidHTTPResponse }
+                    printDebugInfo(from: data, request: request, params: requestBuilder.bodyParams, response: response)
+                }
+                .map(\.data)
+                .tryMap({ data in
+                    guard let dictionary = try JSONSerialization.jsonObject(with: data, options: .allowFragments) as? [String:Any] else { throw RapideError.failedToDecodeJSONError }
+                    return dictionary
+                })
+                .mapError { _ in RapideError.failedToDecodeJSONError }
+                .eraseToAnyPublisher()
+        }
+        
+        /// Returns a publisher that builds and executes a given HTTP method with a URLRequest configured with the data provider in this builder. The returned publisher has a success type [String: Any]
+        ///
+        /// - Parameters:
+        ///   - method: The HTTP Method to perform for this request.
+        ///   - type: The expected Codable conforming result type to map the JSON response to.
+        ///   - decoder: A JSON decoder
+        ///   - customErrorType: A known error model type where the service will return a JSON object as an error response. Only valid for status codes 400 and 500 responses.
+        ///
+        public func execute<E: DecodableError>(_ method: HTTPMethod, customErrorType: E.Type, decoder: JSONDecoder = JSONDecoder()) -> AnyPublisher<[String: Any], RapideError> {
+            let request = buildRequest(for: method)
+            return URLSession(configuration: .default)
+                .dataTaskPublisher(for: request)
+                .mapError({ error -> RapideError in
+                    switch error {
+                    case URLError.userAuthenticationRequired:
+                        return RapideError.missingAuthenticationToken
+                        
+                    case URLError.notConnectedToInternet:
+                        return RapideError.userIsOffline
+                                                    
+                    default: return RapideError.requestError(error)
+                    }
+                })
+                .validate { data, response in
+                    guard let response = response as? HTTPURLResponse else { throw RapideError.invalidHTTPResponse }
+                    printDebugInfo(from: data, request: request, params: requestBuilder.bodyParams, response: response)
+                
+                    let stringStatusCode = String(response.statusCode)
+                
+                    if stringStatusCode.hasPrefix("4") || stringStatusCode.hasPrefix("5") {
+                        let errorModel = try decoder.decode(customErrorType, from: data)
+                        
+                        throw RapideError.customError(errorModel)
+                    }
+                }
+                .map(\.data)
+                .tryMap({ data in
+                    guard let dictionary = try JSONSerialization.jsonObject(with: data, options: .allowFragments) as? [String:Any] else { throw RapideError.failedToDecodeJSONError }
+                    return dictionary
+                })
+                .mapError { _ in RapideError.failedToDecodeJSONError }
+                .eraseToAnyPublisher()
+        }
     }
 }
+
