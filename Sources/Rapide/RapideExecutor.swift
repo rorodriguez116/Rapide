@@ -107,7 +107,15 @@ extension Rapide {
                 }
                 .map(\.data)
                 .decode(type: T.self, decoder: decoder)
-                .mapError { _ in RapideError.failedToDecodeJSONError }
+                .mapError { error in
+                    if let err = error as? RapideError {
+                        return err
+                    } else if let err = error as? DecodingError {
+                        return RapideError.failedToDecodeJSONError(err)
+                    }
+                    
+                    return RapideError.invalidHTTPResponse
+                }
                 .eraseToAnyPublisher()
         }
         
@@ -148,7 +156,15 @@ extension Rapide {
                 }
                 .map(\.data)
                 .decode(type: T.self, decoder: decoder)
-                .mapError { _ in RapideError.failedToDecodeJSONError }
+                .mapError { error in
+                    if let err = error as? RapideError {
+                        return err
+                    } else if let err = error as? DecodingError {
+                        return RapideError.failedToDecodeJSONError(err)
+                    }
+                    
+                    return RapideError.invalidHTTPResponse
+                }
                 .eraseToAnyPublisher()
         }
         
@@ -177,10 +193,18 @@ extension Rapide {
                 }
                 .map(\.data)
                 .tryMap({ data in
-                    guard let dictionary = try JSONSerialization.jsonObject(with: data, options: .allowFragments) as? [String:Any] else { throw RapideError.failedToDecodeJSONError }
+                    guard let dictionary = try JSONSerialization.jsonObject(with: data, options: .allowFragments) as? [String:Any] else { throw RapideError.invalidHTTPResponse }
                     return dictionary
                 })
-                .mapError { _ in RapideError.failedToDecodeJSONError }
+                .mapError { error in
+                    if let err = error as? RapideError {
+                        return err
+                    } else if let err = error as? DecodingError {
+                        return RapideError.failedToDecodeJSONError(err)
+                    }
+                    
+                    return RapideError.invalidHTTPResponse
+                }
                 .eraseToAnyPublisher()
         }
         
@@ -221,10 +245,18 @@ extension Rapide {
                 }
                 .map(\.data)
                 .tryMap({ data in
-                    guard let dictionary = try JSONSerialization.jsonObject(with: data, options: .allowFragments) as? [String:Any] else { throw RapideError.failedToDecodeJSONError }
+                    guard let dictionary = try JSONSerialization.jsonObject(with: data, options: .allowFragments) as? [String:Any] else { throw RapideError.invalidHTTPResponse }
                     return dictionary
                 })
-                .mapError { _ in RapideError.failedToDecodeJSONError }
+                .mapError { error in
+                    if let err = error as? RapideError {
+                        return err
+                    } else if let err = error as? DecodingError {
+                        return RapideError.failedToDecodeJSONError(err)
+                    }
+                    
+                    return RapideError.invalidHTTPResponse
+                }
                 .eraseToAnyPublisher()
         }
     }

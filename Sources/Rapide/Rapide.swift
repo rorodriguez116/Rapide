@@ -15,7 +15,7 @@ public enum RapideError: Error {
     case missingAuthenticationToken
     case userIsOffline
     case requestError(URLError)
-    case failedToDecodeJSONError
+    case failedToDecodeJSONError(DecodingError)
     case invalidHTTPResponse
 }
 
