@@ -69,7 +69,8 @@ extension Rapide {
                 print("Parameters: \(jsonParams)")
             }
             
-            print("Result: HTTP Status Code \(response.statusCode)")
+            
+            print("Result: HTTP Status Code \(response.statusCode) \(StatusCode(rawValue: response.statusCode) ?? StatusCode.invalidData)")
             
             if let json = String(data: data, encoding: String.Encoding.utf8) {
                 print("Response: \(json)")
@@ -86,36 +87,16 @@ extension Rapide {
         ///   - decoder: A JSON decoder
         ///   - customErrorType: A known error model type where the service will return a JSON object as an error response.
         ///
-        public func execute<T: Decodable>(_ method: HTTPMethod, decoding type: T.Type, decoder: JSONDecoder = JSONDecoder()) -> AnyPublisher<T, RapideError> {
+        public func execute<T: Decodable>(_ method: HTTPMethod, decoding type: T.Type, decoder: JSONDecoder = JSONDecoder()) -> AnyPublisher<T, Error> {
             let request = buildRequest(for: method)
             return URLSession(configuration: .default)
                 .dataTaskPublisher(for: request)
-                .mapError({ error -> RapideError in
-                    switch error {
-                    case URLError.userAuthenticationRequired:
-                        return RapideError.missingAuthenticationToken
-                        
-                    case URLError.notConnectedToInternet:
-                        return RapideError.userIsOffline
-                                                    
-                    default: return RapideError.requestError(error)
-                    }
-                })
                 .validate { data, response in
                     guard let response = response as? HTTPURLResponse else { throw RapideError.invalidHTTPResponse }
                     printDebugInfo(from: data, request: request, params: requestBuilder.bodyParams, response: response)
                 }
                 .map(\.data)
                 .decode(type: T.self, decoder: decoder)
-                .mapError { error in
-                    if let err = error as? RapideError {
-                        return err
-                    } else if let err = error as? DecodingError {
-                        return RapideError.failedToDecodeJSONError(err)
-                    }
-                    
-                    return RapideError.invalidHTTPResponse
-                }
                 .eraseToAnyPublisher()
         }
         
@@ -127,21 +108,10 @@ extension Rapide {
         ///   - decoder: A JSON decoder
         ///   - customErrorType: A known error model type where the service will return a JSON object as an error response. Only valid for status codes 400 and 500 responses.
         ///
-        public func execute<T: Decodable, E: DecodableError>(_ method: HTTPMethod, decoding type: T.Type, decoder: JSONDecoder = JSONDecoder(), customErrorType: E.Type) -> AnyPublisher<T, RapideError> {
+        public func execute<T: Decodable, E: DecodableError>(_ method: HTTPMethod, decoding type: T.Type, decoder: JSONDecoder = JSONDecoder(), customErrorType: E.Type) -> AnyPublisher<T, Error> {
             let request = buildRequest(for: method)
             return URLSession(configuration: .default)
                 .dataTaskPublisher(for: request)
-                .mapError({ error -> RapideError in
-                    switch error {
-                    case URLError.userAuthenticationRequired:
-                        return RapideError.missingAuthenticationToken
-                        
-                    case URLError.notConnectedToInternet:
-                        return RapideError.userIsOffline
-                                                    
-                    default: return RapideError.requestError(error)
-                    }
-                })
                 .validate { data, response in
                     guard let response = response as? HTTPURLResponse else { throw RapideError.invalidHTTPResponse }
                     printDebugInfo(from: data, request: request, params: requestBuilder.bodyParams, response: response)
@@ -151,20 +121,11 @@ extension Rapide {
                     if stringStatusCode.hasPrefix("4") || stringStatusCode.hasPrefix("5") {
                         let errorModel = try decoder.decode(customErrorType, from: data)
                         
-                        throw RapideError.customError(errorModel)
+                        throw errorModel
                     }
                 }
                 .map(\.data)
                 .decode(type: T.self, decoder: decoder)
-                .mapError { error in
-                    if let err = error as? RapideError {
-                        return err
-                    } else if let err = error as? DecodingError {
-                        return RapideError.failedToDecodeJSONError(err)
-                    }
-                    
-                    return RapideError.invalidHTTPResponse
-                }
                 .eraseToAnyPublisher()
         }
         
@@ -172,21 +133,10 @@ extension Rapide {
         ///
         /// - Parameters:
         ///   - method: The HTTP Method to perform for this request.
-        public func execute(_ method: HTTPMethod) -> AnyPublisher<[String: Any], RapideError> {
+        public func execute(_ method: HTTPMethod) -> AnyPublisher<[String: Any], Error> {
             let request = buildRequest(for: method)
             return URLSession(configuration: .default)
                 .dataTaskPublisher(for: request)
-                .mapError({ error -> RapideError in
-                    switch error {
-                    case URLError.userAuthenticationRequired:
-                        return RapideError.missingAuthenticationToken
-                        
-                    case URLError.notConnectedToInternet:
-                        return RapideError.userIsOffline
-                                                    
-                    default: return RapideError.requestError(error)
-                    }
-                })
                 .validate { data, response in
                     guard let response = response as? HTTPURLResponse else { throw RapideError.invalidHTTPResponse }
                     printDebugInfo(from: data, request: request, params: requestBuilder.bodyParams, response: response)
@@ -196,15 +146,6 @@ extension Rapide {
                     guard let dictionary = try JSONSerialization.jsonObject(with: data, options: .allowFragments) as? [String:Any] else { throw RapideError.invalidHTTPResponse }
                     return dictionary
                 })
-                .mapError { error in
-                    if let err = error as? RapideError {
-                        return err
-                    } else if let err = error as? DecodingError {
-                        return RapideError.failedToDecodeJSONError(err)
-                    }
-                    
-                    return RapideError.invalidHTTPResponse
-                }
                 .eraseToAnyPublisher()
         }
         
@@ -216,21 +157,10 @@ extension Rapide {
         ///   - decoder: A JSON decoder
         ///   - customErrorType: A known error model type where the service will return a JSON object as an error response. Only valid for status codes 400 and 500 responses.
         ///
-        public func execute<E: DecodableError>(_ method: HTTPMethod, customErrorType: E.Type, decoder: JSONDecoder = JSONDecoder()) -> AnyPublisher<[String: Any], RapideError> {
+        public func execute<E: DecodableError>(_ method: HTTPMethod, customErrorType: E.Type, decoder: JSONDecoder = JSONDecoder()) -> AnyPublisher<[String: Any], Error> {
             let request = buildRequest(for: method)
             return URLSession(configuration: .default)
                 .dataTaskPublisher(for: request)
-                .mapError({ error -> RapideError in
-                    switch error {
-                    case URLError.userAuthenticationRequired:
-                        return RapideError.missingAuthenticationToken
-                        
-                    case URLError.notConnectedToInternet:
-                        return RapideError.userIsOffline
-                                                    
-                    default: return RapideError.requestError(error)
-                    }
-                })
                 .validate { data, response in
                     guard let response = response as? HTTPURLResponse else { throw RapideError.invalidHTTPResponse }
                     printDebugInfo(from: data, request: request, params: requestBuilder.bodyParams, response: response)
@@ -248,15 +178,6 @@ extension Rapide {
                     guard let dictionary = try JSONSerialization.jsonObject(with: data, options: .allowFragments) as? [String:Any] else { throw RapideError.invalidHTTPResponse }
                     return dictionary
                 })
-                .mapError { error in
-                    if let err = error as? RapideError {
-                        return err
-                    } else if let err = error as? DecodingError {
-                        return RapideError.failedToDecodeJSONError(err)
-                    }
-                    
-                    return RapideError.invalidHTTPResponse
-                }
                 .eraseToAnyPublisher()
         }
     }

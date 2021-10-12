@@ -12,22 +12,20 @@ Rapide
     .path("/api/convert/2000/GBP/EUR")
     .authorization(.none)
     .params(["app_id":"XYZ"])
-    .execute(.get, decoding: String.self)
+    .execute(.get, decoding: String.self, customErrorType: MyErrorType.self)
     .sink { completion in
         if case let .failure(error) = completion {
-            switch error {
-            // Handle expected JSON error response from known status code (e.j 420)
-            case .expectedErrorWithJSONResponse(let data, let code):
-                let decoder = JSONDecoder()
-                decoder.decode(data, from: My420JSONType.self)
-            default: print(error)
+            if let err = error as? MyErrorType {
+                // Handle your custom error
+                print(err.myCustomProperty)
+            } else {
+                // Handle error 
+                print(error)
             }
         }
     } receiveValue: { val in
         // success
-        
     }
-
     .store(in: &self.subscriptions)
 </code>
 </pre>
