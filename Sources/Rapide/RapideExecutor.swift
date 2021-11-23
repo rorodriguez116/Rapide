@@ -180,6 +180,50 @@ extension Rapide {
                 })
                 .eraseToAnyPublisher()
         }
+        
+        /// Returns a publisher that builds and executes a given HTTP method with a URLRequest configured with the data provider in this builder. The returned publisher has a success type of Data, returns the data as provided by the service.
+        ///
+        /// - Parameters:
+        ///   - method: The HTTP Method to perform for this request.
+        ///   - decoder: A JSON decoder
+        ///   - customErrorType: A known error model type where the service will return a JSON object as an error response. Only valid for status codes 400 and 500 responses.
+        ///
+        public func execute<E: DecodableError>(_ method: HTTPMethod, customErrorType: E.Type, decoder: JSONDecoder = JSONDecoder()) -> AnyPublisher<Data, Error> {
+            let request = buildRequest(for: method)
+            return URLSession(configuration: .default)
+                .dataTaskPublisher(for: request)
+                .validate { data, response in
+                    guard let response = response as? HTTPURLResponse else { throw RapideError.invalidHTTPResponse }
+                    printDebugInfo(from: data, request: request, params: requestBuilder.bodyParams, response: response)
+                    
+                    let stringStatusCode = String(response.statusCode)
+                    
+                    if stringStatusCode.hasPrefix("4") || stringStatusCode.hasPrefix("5") {
+                        let errorModel = try decoder.decode(customErrorType, from: data)
+                        
+                        throw errorModel
+                    }
+                }
+                .map(\.data)
+                .eraseToAnyPublisher()
+        }
+        
+        /// Returns a publisher that builds and executes a given HTTP method with a URLRequest configured with the data provider in this builder. The returned publisher has a success type of Data, returns the data as provided by the service.
+        ///
+        /// - Parameters:
+        ///   - method: The HTTP Method to perform for this request.
+        ///
+        public func execute(_ method: HTTPMethod) -> AnyPublisher<Data, Error> {
+            let request = buildRequest(for: method)
+            return URLSession(configuration: .default)
+                .dataTaskPublisher(for: request)
+                .validate { data, response in
+                    guard let response = response as? HTTPURLResponse else { throw RapideError.invalidHTTPResponse }
+                    printDebugInfo(from: data, request: request, params: requestBuilder.bodyParams, response: response)
+                }
+                .map(\.data)
+                .eraseToAnyPublisher()
+        }
     }
 }
 
