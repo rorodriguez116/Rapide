@@ -188,7 +188,7 @@ extension Rapide {
         ///   - decoder: A JSON decoder
         ///   - customErrorType: A known error model type where the service will return a JSON object as an error response. Only valid for status codes 400 and 500 responses.
         ///
-        public func execute<E: DecodableError>(_ method: HTTPMethod, customErrorType: E.Type, decoder: JSONDecoder = JSONDecoder()) -> AnyPublisher<Data, Error> {
+        public func perform<E: DecodableError>(_ method: HTTPMethod, customErrorType: E.Type, decoder: JSONDecoder = JSONDecoder()) -> AnyPublisher<Data, Error> {
             let request = buildRequest(for: method)
             return URLSession(configuration: .default)
                 .dataTaskPublisher(for: request)
@@ -213,7 +213,7 @@ extension Rapide {
         /// - Parameters:
         ///   - method: The HTTP Method to perform for this request.
         ///
-        public func execute(_ method: HTTPMethod) -> AnyPublisher<Data, Error> {
+        public func perform(_ method: HTTPMethod) -> AnyPublisher<Data, Error> {
             let request = buildRequest(for: method)
             return URLSession(configuration: .default)
                 .dataTaskPublisher(for: request)
