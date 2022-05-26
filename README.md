@@ -3,9 +3,9 @@ Rapide is a fast and lightweight combine-based wrapper on URLSession. Rapide pro
 
 ### Usage
 As an example, we'll perform a get request to the following API: 
-<code>https://openexchangerates.org/api/convert/2000/GBP/EUR?app_id=XYZ<code>
-<pre>
-<code>
+`https://openexchangerates.org/api/convert/2000/GBP/EUR?app_id=XYZ<code>`
+
+```
 Rapide
     .https
     .host("openexhangerates.org")
@@ -27,6 +27,6 @@ Rapide
         // success
     }
     .store(in: &self.subscriptions)
-</code>
-</pre>
-The presented code is very easy to read. First we specify the connection scheme we want to use, Rapide offers http, https and ftp. Then we provide the host and path to our API, the parameters we want to pass the API to and we finalize calling execute, which will return a combine publisher that will execute the specified http method and map the response to the provided Codable conforming type. 
+```
+
+This code snippet is very easy to read. First we specify the connection scheme we want to use, Rapide offers http, https and ftp. Then we provide the host and path to our API, the parameters we want to pass the API to and we finalize calling execute, which will return a combine publisher that will execute the specified http method and map the response to the provided Codable conforming type. 
